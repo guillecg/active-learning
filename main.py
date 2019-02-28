@@ -20,6 +20,8 @@ from algorithms.active_learning import (
     MarginSampler
 )
 
+from utils.plots import plot_comparison
+
 
 def load_semeion(path, label_col=0):
     data = pd.read_csv(path, header=None, encoding='utf-8')
@@ -36,10 +38,12 @@ if __name__ == '__main__':
 
     kwargs = {
         'algorithms': {
-            'RandomLearner': RandomLearner,
-            'MarginSampler': MarginSampler,
+            'Random': RandomLearner,
+            'Margin Sampling': MarginSampler,
         }
     }
 
     model = ActiveLearner(**kwargs)
     model.fit(**{'data': data})
+
+    plot_comparison(model.scores)
