@@ -7,7 +7,7 @@ from sklearn.svm import SVC
 
 
 class BaseActiveLearner(object):
-    '''Base class for Active Learning objects
+    ''' Base class for Active Learning objects
     '''
 
     def __init__(self):
@@ -21,7 +21,7 @@ class BaseActiveLearner(object):
 
 
     def update_labels(self, indices):
-        '''Auxiliary method for updating the labels, moving them from the pool
+        ''' Auxiliary method for updating the labels, moving them from the pool
         to the training set
         '''
         self.X_lab = \
@@ -34,8 +34,8 @@ class BaseActiveLearner(object):
 
 
     def get_indices(self, n_points=1):
-        '''Placeholder method to modify for each aproximation
+        ''' Placeholder method to be modified for each aproximation
 
         NOTE: use self.X_unlab
         '''
-        return self
+        raise NotImplementedError
