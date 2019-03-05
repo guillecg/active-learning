@@ -34,7 +34,10 @@ class BaseActiveLearner(object):
 
 
     def get_indices(self, n_points=1):
-        ''' Placeholder method to be modified for each aproximation
+        ''' Placeholder method to be modified for each aproximation.
+
+        This method will be different for each algorithm and will allow
+        choosing samples from the pool heuristically.
 
         NOTE: use self.X_unlab
         '''

@@ -1,14 +1,4 @@
-# -*- coding: utf-8 -*-
-
-# TODO:
-## Active learning algorithms:
-# MS (margin sampling, or most uncertain)
-# MCLU (multi-class label uncertainty)
-# SSC (significance space construction)
-# nEQB (normalized entropy query bagging)
-
 ## Diversity
-# MAO (most ambiguous and orthogonal)
 # lambda
 # diversity by clustering
 
@@ -20,6 +10,10 @@ from algorithms.active_learning import (
     MarginSampling,
     MulticlassUncertainty,
     SignificanceSpaceConstruction,
+    nEQB,
+    MAODiversity,
+    MAOLambda,
+    MAOCluster,
 )
 
 from utils.plots import plot_comparison
@@ -44,6 +38,10 @@ if __name__ == '__main__':
             'Margin Sampling': MarginSampling,
             'Multiclass Uncertainty': MulticlassUncertainty,
             'SignificanceSpaceConstruction': SignificanceSpaceConstruction,
+            'nEQB': nEQB,
+            'MAODiversity': MAODiversity,
+            'MAOLambda': MAOLambda,
+            'MAOCluster': MAOCluster,
         }
     }
 
