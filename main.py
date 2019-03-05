@@ -2,7 +2,7 @@
 
 # TODO:
 ## Active learning algorithms:
-# MS (margin sampling, o most uncertain)
+# MS (margin sampling, or most uncertain)
 # MCLU (multi-class label uncertainty)
 # SSC (significance space construction)
 # nEQB (normalized entropy query bagging)
@@ -17,7 +17,9 @@ import pandas as pd
 from algorithms.active_learning import (
     ActiveLearner,
     RandomLearner,
-    MarginSampler
+    MarginSampling,
+    MulticlassUncertainty,
+    SignificanceSpaceConstruction,
 )
 
 from utils.plots import plot_comparison
@@ -26,7 +28,7 @@ from utils.plots import plot_comparison
 def load_semeion(path, label_col=0):
     data = pd.read_csv(path, header=None, encoding='utf-8')
 
-    return data.iloc[:, 1:].values, data.iloc[:, 0].values
+    return data.iloc[:, label_col+1:].values, data.iloc[:, label_col].values
 
 
 if __name__ == '__main__':
@@ -39,7 +41,9 @@ if __name__ == '__main__':
     kwargs = {
         'algorithms': {
             'Random': RandomLearner,
-            'Margin Sampling': MarginSampler,
+            'Margin Sampling': MarginSampling,
+            'Multiclass Uncertainty': MulticlassUncertainty,
+            'SignificanceSpaceConstruction': SignificanceSpaceConstruction,
         }
     }
 
