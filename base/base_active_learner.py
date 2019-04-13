@@ -33,6 +33,16 @@ class BaseActiveLearner(object):
         self.y_unlab = np.delete(self.y_unlab, indices, axis=0)
 
 
+    def get_dist(self):
+        ''' Sets 'dist' as an attribute of the class in order to be used by the
+        MAODiversity and MAOLambda algorithms
+        '''
+        dist = np.abs(self.estimator.decision_function(self.X_unlab))
+
+        # Sort inside each sample from lowest to most probable classes
+        self.dist = np.sort(dist, axis=1)
+
+
     def get_indices(self, n_points=1):
         ''' Placeholder method to be modified for each aproximation.
 

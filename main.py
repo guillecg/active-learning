@@ -11,10 +11,8 @@ from algorithms.active_learning import (
     MulticlassUncertainty,
     SignificanceSpaceConstruction,
     nEQB,
-    MAODiversity,
-    MAOLambda,
-    MAOCluster,
 )
+from algorithms.diversity import MAODiversity, MAOLambda, MAOCluster
 
 from utils.plots import plot_comparison
 
@@ -25,6 +23,17 @@ def load_semeion(path, label_col=0):
     return data.iloc[:, label_col+1:].values, data.iloc[:, label_col].values
 
 
+AL_ALGORITHMS = [
+    RandomLearner,
+    MarginSampling,
+    MulticlassUncertainty,
+    SignificanceSpaceConstruction,
+    # nEQB,
+]
+
+AL_DIVERSITY = [MAODiversity, MAOLambda, MAOCluster]
+
+
 if __name__ == '__main__':
     data = {
         'labeled': load_semeion('data/semeion_labeled.csv'),
@@ -32,18 +41,14 @@ if __name__ == '__main__':
         'test': load_semeion('data/semeion_test.csv'),
     }
 
-    kwargs = {
-        'algorithms': {
-            'Random': RandomLearner,
-            'Margin Sampling': MarginSampling,
-            'Multiclass Uncertainty': MulticlassUncertainty,
-            'SignificanceSpaceConstruction': SignificanceSpaceConstruction,
-            'nEQB': nEQB,
-            'MAODiversity': MAODiversity,
-            'MAOLambda': MAOLambda,
-            'MAOCluster': MAOCluster,
-        }
+    algorithms = {
+        '{} - {}'.format(alg_name.__name__, alg_criterion.__name__): \
+            (alg_name, alg_criterion)
+        for alg_name in AL_ALGORITHMS
+        for alg_criterion in AL_DIVERSITY
     }
+
+    kwargs = {'algorithms': algorithms}
 
     model = ActiveLearner(**kwargs)
     model.fit(**{'data': data})

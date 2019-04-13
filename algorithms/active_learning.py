@@ -11,8 +11,6 @@ from sklearn.model_selection import train_test_split
 from sklearn.svm import SVC
 
 from sklearn.utils import resample # nEQB
-from sklearn.metrics.pairwise import rbf_kernel # MAODiversity
-from sklearn.cluster import KMeans # MAOCluster
 
 from collections import defaultdict
 
@@ -21,6 +19,7 @@ from copy import copy
 from tqdm import tqdm
 
 from base.base_active_learner import BaseActiveLearner
+from algorithms.diversity import MAODiversity, MAOLambda, MAOCluster
 
 
 # More info: https://stackoverflow.com/questions/37012320
@@ -85,12 +84,16 @@ class ActiveLearner(object):
         gamma = 1 / (2 * sigma * sigma)
         base_estimator = SVC(C=100, gamma=gamma, decision_function_shape='ovr')
 
-        for alg_name, alg_class in self.algorithms.items():
+        for alg_name, (alg_class, alg_criterion) in self.algorithms.items():
             # Initalize labels in all algorithms (they must start with the
             # same labels) and base estimator
             alg_class = alg_class(base_estimator)
             alg_class.init_labels(X_unlab, X_lab, y_unlab, y_lab)
             self.algorithms[alg_name] = alg_class
+
+            # Instantiate criterion class
+            if alg_criterion not in [MAODiversity, MAOLambda, MAOCluster]:
+                raise NotImplementedError
 
             print('[+] Algorithm: {}'.format(alg_name))
 
@@ -103,10 +106,19 @@ class ActiveLearner(object):
                 alg_scores.append(alg_class.estimator.score(X_test, y_test))
 
                 # 3. Choose samples from X_unlab, y_unlab
-                indices = alg_class.get_indices(n_points=self.n_update_points)
+                indices = alg_class.get_indices()
+
+                # 3.1 Apply diversity criterion to the indices if required
+                if alg_criterion:
+                    indices = alg_criterion(alg_class.estimator).get_indices(
+                        X_unlab=alg_class.X_unlab,
+                        indices=indices,
+                        dist=alg_class.dist,
+                        n_points=self.n_update_points,
+                    )
 
                 # 4. Update labels, moving them from pool to train
-                alg_class.update_labels(indices)
+                alg_class.update_labels(indices[:self.n_update_points])
 
             self.scores[alg_name] = alg_scores
 
@@ -118,11 +130,14 @@ class RandomLearner(BaseActiveLearner):
         super(RandomLearner, self).__init__()
 
         self.estimator = estimator
+        self.dist = []
 
 
     def get_indices(self, n_points=1):
+        # Get distances to hyperplane: sets 'self.dist'
+        self.get_dist()
+
         indices = np.random.permutation(self.X_unlab.shape[0])
-        indices = indices[:n_points]
 
         return indices
 
@@ -134,19 +149,18 @@ class MarginSampling(BaseActiveLearner):
         super(MarginSampling, self).__init__()
 
         self.estimator = estimator
+        self.dist = []
 
 
     def get_indices(self, n_points=1):
-        dist = np.abs(self.estimator.decision_function(self.X_unlab))
-
-        # Sort inside each sample from lowest to most probable classes
-        dist = np.sort(dist, axis=1)
+        # Get distances to hyperplane: sets 'self.dist'
+        self.get_dist()
 
         # Sort along all samples to get the most uncertain samples, this is,
         # samples with lowest distance to hyperplane for its most probable class
-        indices = np.argsort(dist[:, -1])
+        indices = np.argsort(self.dist[:, -1])
 
-        return indices[:n_points]
+        return indices
 
 
 
@@ -156,19 +170,18 @@ class MulticlassUncertainty(BaseActiveLearner):
         super(MulticlassUncertainty, self).__init__()
 
         self.estimator = estimator
+        self.dist = []
 
 
     def get_indices(self, n_points=1):
-        dist = np.abs(self.estimator.decision_function(self.X_unlab))
-
-        # Sort inside each sample from lowest to most probable classes
-        dist = np.sort(dist, axis=1)
+        # Get distances to hyperplane: sets 'self.dist'
+        self.get_dist()
 
         # Sort along all samples to get the most uncertain samples, this is,
         # samples with lowest difference between the most probable classes
-        indices = np.argsort(dist[:, -1] - dist[:, -2])
+        indices = np.argsort(self.dist[:, -1] - self.dist[:, -2])
 
-        return indices[:n_points]
+        return indices
 
 
 
@@ -186,6 +199,9 @@ class SignificanceSpaceConstruction(BaseActiveLearner):
 
 
     def get_indices(self, n_points=1):
+        # Get distances to hyperplane: sets 'self.dist'
+        self.get_dist()
+
         X_train = self.X_lab
         y_train = np.zeros(self.y_lab.shape)
 
@@ -202,23 +218,26 @@ class SignificanceSpaceConstruction(BaseActiveLearner):
             indices = np.arange(self.X_unlab.shape[0])[possible_SVs == 1]
             indices = np.random.permutation(indices)
 
-        return indices[:n_points]
+        return indices
 
 
 
 class nEQB(BaseActiveLearner):
 
-    def __init__(self, estimator):
+    def __init__(self, estimator, n_models=4):
         super(nEQB, self).__init__()
 
         self.estimator = estimator
 
         # Create second estimator, which will predict labels for the candidates
-        self.n_models = 4
-        self.cand_estimator = copy(estimator)
+        self.n_models = n_models
+        self.candidate_estimator = copy(estimator)
 
 
     def get_indices(self, n_points=1):
+        # Get distances to hyperplane: sets 'self.dist'
+        self.get_dist()
+
         classes = np.unique(self.y_lab)
         n_classes = len(classes)
         n_unlab = self.X_unlab.shape[0]
@@ -232,8 +251,8 @@ class nEQB(BaseActiveLearner):
                 if len(np.unique(y_bag)) >= n_classes:
                     break
 
-            self.cand_estimator.fit(X_bag, y_bag)
-            pred_matrix[:, k] = self.cand_estimator.predict(self.X_unlab)
+            self.candidate_estimator.fit(X_bag, y_bag.ravel())
+            pred_matrix[:, k] = self.candidate_estimator.predict(self.X_unlab)
 
         # Count number of votes per class
         ct = np.zeros((self.X_unlab.shape[0], n_classes))
@@ -259,118 +278,4 @@ class nEQB(BaseActiveLearner):
         indices = np.where(nEQB == np.max(nEQB))[0]
         np.random.shuffle(indices)
 
-        return indices[:n_points]
-
-
-
-class MAOBase(BaseActiveLearner):
-
-    def __init__(self):
-        super(MAOBase, self).__init__()
-
-
-    def get_indices(self, n_points=1):
-        dist = np.abs(self.estimator.decision_function(self.X_unlab))
-
-        # Sort inside each sample from lowest to most probable classes
-        dist = np.sort(dist, axis=1)
-
-        # Sort along all samples to get the most uncertain samples, this is,
-        # samples with lowest distance to hyperplane for its most probable class
-        indices = np.argsort(dist[:, -1])
-
-        # We cannot limit the number of points in 'indices' to query_points,
-        # but we cannot use all points either, otherwise appart from the first
-        # point, the rest will be selected using only the diverse criterion,
-        # and not the uncertainty criterion
-
-        # Lets limit the pool of possible samples as:
-        indices = indices[0:n_points * 10]
-
-
-        # Measure distances using the kernel function
-        K = rbf_kernel(self.X_unlab, gamma=self.estimator.get_params()['gamma'])
-
-
-        s_indices = np.zeros(n_points, dtype=np.int64)
-        for i in range(n_points):
-            # Add the first point (and remove it from pool)
-            s_indices[i] = indices[0]
-            indices = indices[1:]
-
-            # Compute distances (kernel matrix)
-            # Distances between selected samples (Sidx) and the rest (idx)
-            Kdist = np.abs(K[s_indices[0:i+1], :][:, indices])
-
-            # Obtain the minimum distance for each column
-            Kdist = Kdist.min(axis=0)
-
-            # Choose method to obtain indices
-            if self.method == 'diversity':
-                # Re-order by distance
-                indices = indices[Kdist.argsort(axis=0)]
-
-            elif self.method == 'lambda':
-                # Trade-off between MS and Diversitylambda
-                lambd = 0.6
-                heuristic = dist[indices, -1] * lambd + Kdist * (1 - lambd)
-                indices = indices[heuristic.argsort()]
-
-        return s_indices
-
-
-
-class MAODiversity(MAOBase):
-
-    def __init__(self, estimator):
-        super(MAODiversity, self).__init__()
-
-        self.estimator = estimator
-        self.method = 'diversity'
-
-
-
-class MAOLambda(MAOBase):
-
-    def __init__(self, estimator):
-        super(MAOLambda, self).__init__()
-
-        self.estimator = estimator
-        self.method = 'lambda'
-
-
-
-class MAOCluster(BaseActiveLearner):
-
-    def __init__(self, estimator):
-        super(MAOCluster, self).__init__()
-
-        self.estimator = estimator
-
-
-    def get_indices(self, n_points=1):
-        dist = np.abs(self.estimator.decision_function(self.X_unlab))
-
-        # Sort inside each sample from lowest to most probable classes
-        dist = np.sort(dist, axis=1)
-
-        # Sort along all samples to get the most uncertain samples, this is,
-        # samples with lowest distance to hyperplane for its most probable class
-        indices = np.argsort(dist[:, -1])
-        # We can limit the pool of candidates when clustering to relax the
-        # computational burden, but in principle using all unlabeled
-        # samples should obtain a better partition
-        # idx = idx[0:3*queried_points]
-
-        # Cluster the unlabeled set
-        kmeans = KMeans(n_clusters=n_points)
-        cluster_IDs = kmeans.fit_predict(self.X_unlab)
-
-        s_indices = np.zeros(n_points, dtype=np.int64)
-        for i in range(n_points):
-            # Select one sample per cluster. More specifically, select the
-            # first point in 'indices', already sorted according the MS
-            # uncertainty criterion
-            s_indices[i] = indices[cluster_IDs == i][0]
-
-        return s_indices
+        return indices
