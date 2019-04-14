@@ -33,7 +33,7 @@ class ActiveLearner(object):
         self.test_size = self.lab_size = 0.33
 
         self.n_queries = 50
-        self.n_update_points = 10
+        self.n_update_points = 1
         self.algorithms = dict()
 
         # TODO: rearrange self.estimator in order to add gamma adjusted to data

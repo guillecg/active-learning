@@ -28,7 +28,7 @@ AL_ALGORITHMS = [
     MarginSampling,
     MulticlassUncertainty,
     SignificanceSpaceConstruction,
-    # nEQB,
+    nEQB,
 ]
 
 AL_DIVERSITY = [MAODiversity, MAOLambda, MAOCluster]
@@ -48,7 +48,11 @@ if __name__ == '__main__':
         for alg_criterion in AL_DIVERSITY
     }
 
-    kwargs = {'algorithms': algorithms}
+    kwargs = {
+        'algorithms': algorithms,
+        'n_queries': 85,
+        'n_update_points': 10,
+    }
 
     model = ActiveLearner(**kwargs)
     model.fit(**{'data': data})

@@ -21,6 +21,11 @@ class MAOBase():
         # point, the rest will be selected using only the diverse criterion,
         # and not the uncertainty criterion
 
+        # Avoid errors when the number of indices is less than the number of
+        # points (e.g. no more than 6 points with max entropy in nEQB)
+        if n_points > indices.shape[0]:
+            n_points = indices.shape[0]
+
         # Lets limit the pool of possible samples as:
         indices = indices[0:n_points * 10]
 
@@ -88,6 +93,11 @@ class MAOCluster():
 
 
     def get_indices(self, X_unlab, indices, dist, n_points=1):
+        # Avoid errors when the number of indices is less than the number of
+        # points (e.g. no more than 6 points with max entropy in nEQB)
+        if n_points > indices.shape[0]:
+            n_points = indices.shape[0]
+
         # Cluster the unlabeled set
         kmeans = KMeans(n_clusters=n_points)
 
